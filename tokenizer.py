@@ -5,7 +5,7 @@ tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 
-def remove_links(text_input):
+def change_links(text_input):
     words = text_input.split()
     new_words = []
     for word in words:
@@ -16,9 +16,21 @@ def remove_links(text_input):
     return ' '.join(new_words)
 
 
+def change_mentions(text_input):
+    words = text_input.split()
+    new_words = []
+    for word in words:
+        if '@' != word[0]:
+            new_words.append(word)
+        else:
+            new_words.append('<mention>')
+    return ' '.join(new_words)
+
+
 def pre_process(text_input):
     text_input = text_input.lower()
-    text_input = remove_links(text_input)
+    text_input = change_links(text_input)
+    text_input = change_mentions(text_input)
     return text_input
 
 

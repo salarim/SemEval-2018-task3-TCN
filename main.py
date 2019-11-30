@@ -36,8 +36,8 @@ parser.add_argument('--levels', type=int, default=4,
                     help='# of levels (default: 4)')
 parser.add_argument('--log-interval', type=int, default=2, metavar='N',
                     help='report interval (default: 2)')
-parser.add_argument('--lr', type=float, default=4,
-                    help='initial learning rate (default: 4)')
+parser.add_argument('--lr', type=float, default=0.1,
+                    help='initial learning rate (default: 0.1)')
 parser.add_argument('--nhid', type=int, default=600,
                     help='number of hidden units per layer (default: 600)')
 parser.add_argument('--seed', type=int, default=1111,
@@ -89,6 +89,7 @@ def evaluate(data_source):
     model.eval()
     total_loss = 0
     processed_data_size = 0
+    cor_num = 0
     with torch.no_grad():
         for batch_idx, (data, label) in enumerate(data_source):
             data = data.view(1, data.size(0), data.size(1))
@@ -98,11 +99,13 @@ def evaluate(data_source):
                 label = label.cuda()
             output = model(data)
 
+            if torch.abs(output - label).item() < 0.5:
+                cor_num += 1
             loss = criterion(output, label)
 
             total_loss += loss.item()
             processed_data_size += data.size(1)
-        return total_loss / processed_data_size
+        return total_loss / processed_data_size, (float)(cor_num)/len(data_source)
 
 
 def train():
@@ -111,6 +114,7 @@ def train():
     model.train()
     total_loss = 0
     start_time = time.time()
+    cor_num = 0
     for batch_idx, (data, label) in enumerate(train_data):
         data = data.view(1, data.size(0), data.size(1))
         label = label.view(1, label.size(0))
@@ -120,6 +124,8 @@ def train():
         optimizer.zero_grad()
         output = model(data)
 
+        if torch.abs(output - label).item() < 0.5:
+            cor_num += 1
         loss = criterion(output, label)
 
         loss.backward()
@@ -139,6 +145,7 @@ def train():
             total_loss = 0
             start_time = time.time()
 
+    print('acc {:1.2f}'.format((float)(cor_num)/len(train_data)))
 
 if __name__ == "__main__":
     best_vloss = 1e8
@@ -149,16 +156,16 @@ if __name__ == "__main__":
         for epoch in range(1, args.epochs+1):
             epoch_start_time = time.time()
             train()
-            val_loss = evaluate(valid_data)
-            test_loss = evaluate(test_data)
+            val_loss, val_acc = evaluate(valid_data)
+            test_loss, test_acc = evaluate(test_data)
 
             print('-' * 89)
-            print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
+            print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | valid acc {:1.2f}'
                   .format(epoch, (time.time() - epoch_start_time),
-                                               val_loss))
-            print('| end of epoch {:3d} | time: {:5.2f}s | test loss {:5.2f} | '
+                                               val_loss, val_acc))
+            print('| end of epoch {:3d} | time: {:5.2f}s | test loss {:5.2f} | test acc {:1.2f}'
                   .format(epoch, (time.time() - epoch_start_time),
-                                            test_loss))
+                                            test_loss, test_acc))
             print('-' * 89)
 
             # Save the model if the validation loss is the best we've seen so far.
@@ -169,11 +176,11 @@ if __name__ == "__main__":
                 best_vloss = val_loss
 
             # Anneal the learning rate if the validation loss plateaus
-            if epoch > 5 and val_loss >= max(all_vloss[-5:]):
-                lr = lr / 2.
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = lr
-            all_vloss.append(val_loss)
+            # if epoch > 5 and val_loss >= max(all_vloss[-5:]):
+            #     lr = lr / 2.
+            #     for param_group in optimizer.param_groups:
+            #         param_group['lr'] = lr
+            # all_vloss.append(val_loss)
 
     except KeyboardInterrupt:
         print('-' * 89)
@@ -184,8 +191,8 @@ if __name__ == "__main__":
         model = torch.load(f)
 
     # Run on test data.
-    test_loss = evaluate(test_data)
+    test_loss, test_acc = evaluate(test_data)
     print('=' * 89)
-    print('| End of training | test loss {:5.2f}'.format(
-        test_loss))
+    print('| End of training | test loss {:5.2f} | test acc {:1.2f}'.format(
+        test_loss, test_acc))
     print('=' * 89)

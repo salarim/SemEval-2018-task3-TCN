@@ -30,7 +30,7 @@ class Corpus:
             lines = fp.readlines()
             lines = lines [1:len(lines)]
             for i, line in enumerate(lines):
-                if i > 10:
+                if i > 40:
                     break
                 line = line.split("\t")
                 sentence = line[2]
