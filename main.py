@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
 import sys
-from utils import data_generator, batchify, get_batch
+from utils import data_generator
 from model import TCN
 import pickle
 from random import randint
@@ -28,14 +28,14 @@ parser.add_argument('--epochs', type=int, default=100,
                     help='upper epoch limit (default: 100)')
 parser.add_argument('--ksize', type=int, default=3,
                     help='kernel size (default: 3)')
-parser.add_argument('--data', type=str, default='./data/penn',
-                    help='location of the data corpus (default: ./data/penn)')
-parser.add_argument('--emsize', type=int, default=600,
-                    help='size of word embeddings (default: 600)')
+parser.add_argument('--data', type=str, default='./data/datasets',
+                    help='location of the data corpus (default: ./data/datasets)')
+parser.add_argument('--emsize', type=int, default=3072,
+                    help='size of word embeddings (default: 3072)')
 parser.add_argument('--levels', type=int, default=4,
                     help='# of levels (default: 4)')
-parser.add_argument('--log-interval', type=int, default=100, metavar='N',
-                    help='report interval (default: 100)')
+parser.add_argument('--log-interval', type=int, default=2, metavar='N',
+                    help='report interval (default: 2)')
 parser.add_argument('--lr', type=float, default=4,
                     help='initial learning rate (default: 4)')
 parser.add_argument('--nhid', type=int, default=600,
@@ -63,25 +63,23 @@ if torch.cuda.is_available():
 print(args)
 corpus = data_generator(args)
 eval_batch_size = 10
-train_data = batchify(corpus.train, args.batch_size, args)
-val_data = batchify(corpus.valid, eval_batch_size, args)
-test_data = batchify(corpus.test, eval_batch_size, args)
+train_data = list(zip(corpus.train_embeddings, corpus.train_labels))
+valid_data = list(zip(corpus.valid_embeddings, corpus.valid_labels))
+test_data = list(zip(corpus.test_embeddings, corpus.test_labels))
 
 
-n_words = len(corpus.dictionary)
-
-num_chans = [args.nhid] * (args.levels - 1) + [args.emsize]
+num_chans = [args.nhid] * (args.levels)
 k_size = args.ksize
 dropout = args.dropout
 emb_dropout = args.emb_dropout
 tied = args.tied
-model = TCN(args.emsize, n_words, num_chans, dropout=dropout, emb_dropout=emb_dropout, kernel_size=k_size, tied_weights=tied)
+model = TCN(args.emsize, 1, num_chans, dropout=dropout, kernel_size=k_size)
 
 if args.cuda:
     model.cuda()
 
 # May use adaptive softmax to speed up training
-criterion = nn.CrossEntropyLoss()
+criterion = nn.BCELoss()
 
 lr = args.lr
 optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr)
@@ -92,22 +90,18 @@ def evaluate(data_source):
     total_loss = 0
     processed_data_size = 0
     with torch.no_grad():
-        for i in range(0, data_source.size(1) - 1, args.validseqlen):
-            if i + args.seq_len - args.validseqlen >= data_source.size(1) - 1:
-                continue
-            data, targets = get_batch(data_source, i, args, evaluation=True)
+        for batch_idx, (data, label) in enumerate(data_source):
+            data = data.view(1, data.size(0), data.size(1))
+            label = label.view(1, label.size(0))
+            if args.cuda:
+                data = data.cuda()
+                label = label.cuda()
             output = model(data)
 
-            # Discard the effective history, just like in training
-            eff_history = args.seq_len - args.validseqlen
-            final_output = output[:, eff_history:].contiguous().view(-1, n_words)
-            final_target = targets[:, eff_history:].contiguous().view(-1)
+            loss = criterion(output, label)
 
-            loss = criterion(final_output, final_target)
-
-            # Note that we don't add TAR loss here
-            total_loss += (data.size(1) - eff_history) * loss.item()
-            processed_data_size += data.size(1) - eff_history
+            total_loss += loss.item()
+            processed_data_size += data.size(1)
         return total_loss / processed_data_size
 
 
@@ -117,20 +111,16 @@ def train():
     model.train()
     total_loss = 0
     start_time = time.time()
-    for batch_idx, i in enumerate(range(0, train_data.size(1) - 1, args.validseqlen)):
-        if i + args.seq_len - args.validseqlen >= train_data.size(1) - 1:
-            continue
-        data, targets = get_batch(train_data, i, args)
+    for batch_idx, (data, label) in enumerate(train_data):
+        data = data.view(1, data.size(0), data.size(1))
+        label = label.view(1, label.size(0))
+        if args.cuda:
+            data = data.cuda()
+            label = label.cuda()
         optimizer.zero_grad()
         output = model(data)
 
-        # Discard the effective history part
-        eff_history = args.seq_len - args.validseqlen
-        if eff_history < 0:
-            raise ValueError("Valid sequence length must be smaller than sequence length!")
-        final_target = targets[:, eff_history:].contiguous().view(-1)
-        final_output = output[:, eff_history:].contiguous().view(-1, n_words)
-        loss = criterion(final_output, final_target)
+        loss = criterion(output, label)
 
         loss.backward()
         if args.clip > 0:
@@ -143,9 +133,9 @@ def train():
             cur_loss = total_loss / args.log_interval
             elapsed = time.time() - start_time
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.5f} | ms/batch {:5.5f} | '
-                  'loss {:5.2f} | ppl {:8.2f}'.format(
-                epoch, batch_idx, train_data.size(1) // args.validseqlen, lr,
-                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
+                  'loss {:5.2f}'.format(
+                epoch, batch_idx, len(train_data), lr,
+                elapsed * 1000 / args.log_interval, cur_loss))
             total_loss = 0
             start_time = time.time()
 
@@ -159,16 +149,16 @@ if __name__ == "__main__":
         for epoch in range(1, args.epochs+1):
             epoch_start_time = time.time()
             train()
-            val_loss = evaluate(val_data)
+            val_loss = evaluate(valid_data)
             test_loss = evaluate(test_data)
 
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
-                    'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                               val_loss, math.exp(val_loss)))
+                  .format(epoch, (time.time() - epoch_start_time),
+                                               val_loss))
             print('| end of epoch {:3d} | time: {:5.2f}s | test loss {:5.2f} | '
-                  'test ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                            test_loss, math.exp(test_loss)))
+                  .format(epoch, (time.time() - epoch_start_time),
+                                            test_loss))
             print('-' * 89)
 
             # Save the model if the validation loss is the best we've seen so far.
@@ -196,6 +186,6 @@ if __name__ == "__main__":
     # Run on test data.
     test_loss = evaluate(test_data)
     print('=' * 89)
-    print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
-        test_loss, math.exp(test_loss)))
+    print('| End of training | test loss {:5.2f}'.format(
+        test_loss))
     print('=' * 89)

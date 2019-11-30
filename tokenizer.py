@@ -4,33 +4,36 @@ from pytorch_pretrained_bert import BertTokenizer, BertModel, BertForMaskedLM
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-def tokenize_text(text_input):
 
-    # why to add [CLS] and {SEP] to the text ?
+def remove_links(text_input):
+    words = text_input.split()
+    new_words = []
+    for word in words:
+        if 'http' not in word:
+            new_words.append(word)
+        else:
+            new_words.append('<link>')
+    return ' '.join(new_words)
+
+
+def pre_process(text_input):
+    text_input = text_input.lower()
+    text_input = remove_links(text_input)
+    return text_input
+
+
+def get_bert_embedding(text_input):
     marked_text = "[CLS] " + text_input + " [SEP]"
-
-    # marked_text = text_input
-
-    # Tokenize our sentence with the BERT tokenizer.
     text_tokens = tokenizer.tokenize(marked_text)
-
-    # Map the token strings to their vocabulary indeces.
     indexed_tokens = tokenizer.convert_tokens_to_ids(text_tokens)
-
-
     segments_ids = [1] * len(text_tokens)
 
-    # Convert inputs to PyTorch tensors
     tokens_tensor = torch.tensor([indexed_tokens]).to(device)
     segments_tensors = torch.tensor([segments_ids]).to(device)
 
-    # Load pre-trained model (weights)
     model = BertModel.from_pretrained('bert-base-uncased').to(device)
-
-    # Put the model in "evaluation" mode, meaning feed-forward operation.
     model.eval()
 
-    # Predict hidden states features for each layer
     with torch.no_grad():
         encoded_layers, _ = model(tokens_tensor, segments_tensors)
 
@@ -38,27 +41,13 @@ def tokenize_text(text_input):
     token_embeddings = torch.squeeze(token_embeddings, dim=1)
     token_embeddings = token_embeddings.permute(1,0,2)
 
-    # Stores the token vectors, with shape [22 x 3,072]
     token_vecs_cat = []
 
-    # `token_embeddings` is a [22 x 12 x 768] tensor.
-
-    # For each token in the sentence...
     for token in token_embeddings:
-        
-        # `token` is a [12 x 768] tensor
-
-        # Concatenate the vectors (that is, append them together) from the last 
-        # four layers.
-        # Each layer vector is 768 values, so `cat_vec` is length 3,072.
         cat_vec = torch.cat((token[-1], token[-2], token[-3], token[-4]), dim=0)
-        
-        # Use `cat_vec` to represent `token`.
         token_vecs_cat.append(cat_vec)
 
-    print(token_vecs_cat)
-    # return the tokens.
-    return text_tokens
+    return token_vecs_cat
 
 
 def read_dataset_lines(file_path):
@@ -73,14 +62,16 @@ def read_dataset_lines(file_path):
             print(i)
             print(sentence)
             print("irony : ", int(irony))
-            print(tokenize_text(sentence))
+            sentence = pre_process(sentence)
+            print(sentence)
+            sent_embed = get_bert_embedding(sentence)
+            print(sent_embed)
             print("-------------------------------------------")
-            if i > 1:
-                break
+            # break
 
 
 if __name__== "__main__":
     read_dataset_lines("data/datasets/train/SemEval2018-T3-train-taskA.txt")
-    text = "Here is the sentence I want embeddings for."
-    output = tokenize_text(text)
-    print(output)
+    # text = "Here is the sentence I want embeddings for."
+    # output = tokenize_text(text)
+    # print(output)
