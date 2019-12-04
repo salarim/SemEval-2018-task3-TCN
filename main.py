@@ -44,8 +44,8 @@ parser.add_argument('--seed', type=int, default=1111,
                     help='random seed (default: 1111)')
 parser.add_argument('--tied', action='store_false',
                     help='tie the encoder-decoder weights (default: True)')
-parser.add_argument('--optim', type=str, default='SGD',
-                    help='optimizer type (default: SGD)')
+parser.add_argument('--optim', type=str, default='Adam',
+                    help='optimizer type (default: Adam)')
 parser.add_argument('--validseqlen', type=int, default=40,
                     help='valid sequence length (default: 40)')
 parser.add_argument('--seq_len', type=int, default=80,
@@ -85,11 +85,12 @@ lr = args.lr
 optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr)
 
 
-def evaluate(data_source):
+def evaluate(data_source, save_output=False):
     model.eval()
     total_loss = 0
     processed_data_size = 0
     cor_num = 0
+    outputs = []
     with torch.no_grad():
         for batch_idx, (data, label) in enumerate(data_source):
             data = data.view(1, data.size(0), data.size(1))
@@ -98,6 +99,7 @@ def evaluate(data_source):
                 data = data.cuda()
                 label = label.cuda()
             output = model(data)
+            outputs.append(output)
 
             if torch.abs(output - label).item() < 0.5:
                 cor_num += 1
@@ -105,6 +107,15 @@ def evaluate(data_source):
 
             total_loss += loss.item()
             processed_data_size += data.size(1)
+
+        if save_output:
+            with open('res/predictions-taskA.txt', 'w+') as f:
+                for output in outputs:
+                    if output <= 0.5:
+                        f.write('0\n')
+                    else:
+                        f.write('1\n')
+
         return total_loss / processed_data_size, (float)(cor_num)/len(data_source)
 
 
@@ -115,7 +126,9 @@ def train():
     total_loss = 0
     start_time = time.time()
     cor_num = 0
-    for batch_idx, (data, label) in enumerate(train_data):
+    indices = torch.randperm(len(train_data))
+    for batch_idx, ind in enumerate(indices):
+        data, label = train_data[ind][0], train_data[ind][1]
         data = data.view(1, data.size(0), data.size(1))
         label = label.view(1, label.size(0))
         if args.cuda:
@@ -191,7 +204,7 @@ if __name__ == "__main__":
         model = torch.load(f)
 
     # Run on test data.
-    test_loss, test_acc = evaluate(test_data)
+    test_loss, test_acc = evaluate(test_data, save_output=True)
     print('=' * 89)
     print('| End of training | test loss {:5.2f} | test acc {:1.2f}'.format(
         test_loss, test_acc))

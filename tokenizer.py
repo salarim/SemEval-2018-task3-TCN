@@ -12,7 +12,7 @@ def change_links(text_input):
         if 'http' not in word:
             new_words.append(word)
         else:
-            new_words.append('<link>')
+            new_words.append('<quote>')
     return ' '.join(new_words)
 
 
@@ -23,7 +23,7 @@ def change_mentions(text_input):
         if '@' != word[0]:
             new_words.append(word)
         else:
-            new_words.append('<mention>')
+            new_words.append('@somebody')
     return ' '.join(new_words)
 
 
