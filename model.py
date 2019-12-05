@@ -28,3 +28,85 @@ class TCN(nn.Module):
         y = self.sigmoid(y)
         return y
 
+
+
+class lstm_classifier(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_size):
+        super(lstm_classifier, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first = True)
+        self.decoder = nn.Linear(hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, input):
+        #print(input.shape)
+        output,(_, _) = self.lstm(input)
+        y = self.decoder(output[:,-1])
+        y = self.sigmoid(y)
+        return y
+
+class lstm_classifier_bidirectional(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_size):
+        super(lstm_classifier_bidirectional, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first = True, bidirectional = True)
+        self.decoder = nn.Linear(2  * hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, input):
+        #print(input.shape)
+        output,(_, _) = self.lstm(input)
+        y = self.decoder(output[:,-1])
+        y = self.sigmoid(y)
+        return y
+
+
+class GRU_classifier(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_size):
+        super(GRU_classifier, self).__init__()
+        self.GRU = nn.GRU(input_size, hidden_size, batch_first = True)
+        self.decoder = nn.Linear(hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, input):
+        #print(input.shape)
+        output,_ = self.GRU(input)
+        y = self.decoder(output[:,-1])
+        y = self.sigmoid(y)
+        return y
+
+class GRU_classifier_bidirectional(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_size):
+        super(GRU_classifier_bidirectional, self).__init__()
+        self.GRU = nn.GRU(input_size, hidden_size, batch_first = True, bidirectional = True)
+        self.decoder = nn.Linear(hidden_size * 2, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, input):
+        #print(input.shape)
+        output,_ = self.GRU(input)
+        y = self.decoder(output[:,-1])
+        y = self.sigmoid(y)
+        return y
+
+class GRU_classifier_mlayers(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_size, num_layers):
+        super(GRU_classifier_mlayers, self).__init__()
+        self.GRU = nn.GRU(input_size, hidden_size, batch_first = True, num_layers = num_layers)
+        self.decoder = nn.Linear(hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, input):
+        #print(input.shape)
+        output,_ = self.GRU(input)
+        y = self.decoder(output[:,-1])
+        y = self.sigmoid(y)
+        return y

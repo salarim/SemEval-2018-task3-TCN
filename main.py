@@ -8,6 +8,11 @@ import torch.optim as optim
 import sys
 from utils import data_generator
 from model import TCN
+from model import lstm_classifier
+from model import lstm_classifier_bidirectional
+from model import GRU_classifier
+from model import GRU_classifier_bidirectional
+from model import GRU_classifier_mlayers
 import pickle
 from random import randint
 
@@ -44,7 +49,7 @@ parser.add_argument('--seed', type=int, default=1111,
                     help='random seed (default: 1111)')
 parser.add_argument('--tied', action='store_false',
                     help='tie the encoder-decoder weights (default: True)')
-parser.add_argument('--optim', type=str, default='SGD',
+parser.add_argument('--optim', type=str, default='Adam',
                     help='optimizer type (default: Adam)')
 parser.add_argument('--validseqlen', type=int, default=40,
                     help='valid sequence length (default: 40)')
@@ -73,8 +78,13 @@ k_size = args.ksize
 dropout = args.dropout
 emb_dropout = args.emb_dropout
 tied = args.tied
-model = TCN(args.emsize, 1, num_chans, dropout=dropout, kernel_size=k_size)
-
+#model = TCN(args.emsize, 1, num_chans, dropout=dropout, kernel_size=k_size)
+#model = lstm_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
+#model = lstm_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = 600)
+#model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
+#model = GRU_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = 600)
+#model = GRU_classifier_mlayers(input_size = args.emsize, output_size = 1, hidden_size = 600, num_layers = 2)
+model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
 if args.cuda:
     model.cuda()
 
@@ -82,7 +92,9 @@ if args.cuda:
 criterion = nn.BCELoss()
 
 lr = args.lr
-optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr)
+#optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr)
+optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
+
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=False
                                                        , threshold=0.01, threshold_mode='rel', cooldown=0,
                                                        min_lr=0.001, eps=1e-08)
