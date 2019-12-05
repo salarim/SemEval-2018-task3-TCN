@@ -15,6 +15,8 @@ from model import GRU_classifier_bidirectional
 from model import GRU_classifier_mlayers
 import pickle
 from random import randint
+import random
+
 
 
 parser = argparse.ArgumentParser(description='Sequence Modeling - Word-level Language Modeling')
@@ -43,13 +45,13 @@ parser.add_argument('--log-interval', type=int, default=2, metavar='N',
                     help='report interval (default: 2)')
 parser.add_argument('--lr', type=float, default=1.0,
                     help='initial learning rate (default: 0.1)')
-parser.add_argument('--nhid', type=int, default=600,
+parser.add_argument('--nhid', type=int, default=1000,
                     help='number of hidden units per layer (default: 600)')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed (default: 1111)')
 parser.add_argument('--tied', action='store_false',
                     help='tie the encoder-decoder weights (default: True)')
-parser.add_argument('--optim', type=str, default='Adam',
+parser.add_argument('--optim', type=str, default='SGD',
                     help='optimizer type (default: Adam)')
 parser.add_argument('--validseqlen', type=int, default=40,
                     help='valid sequence length (default: 40)')
@@ -60,7 +62,7 @@ parser.add_argument('--corpus', action='store_true',
 args = parser.parse_args()
 
 # Set the random seed manually for reproducibility.
-torch.manual_seed(args.seed)
+#torch.manual_seed(args.seed)
 if torch.cuda.is_available():
     if not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
@@ -84,7 +86,7 @@ tied = args.tied
 #model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
 #model = GRU_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = 600)
 #model = GRU_classifier_mlayers(input_size = args.emsize, output_size = 1, hidden_size = 600, num_layers = 2)
-model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
+model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 500)
 if args.cuda:
     model.cuda()
 
@@ -92,8 +94,8 @@ if args.cuda:
 criterion = nn.BCELoss()
 
 lr = args.lr
-#optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr)
-optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
+optimizer = getattr(optim, args.optim)(model.parameters(), lr=lr)
+#optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=False
                                                        , threshold=0.01, threshold_mode='rel', cooldown=0,
@@ -145,6 +147,14 @@ def train():
     for batch_idx, ind in enumerate(indices):
         data, label = train_data[ind][0], train_data[ind][1]
         data = data.view(1, data.size(0), data.size(1))
+
+        for i in range (0, data.shape[1]):
+            p = random.random()
+            if p < 0.2:
+                #data[0,i] = torch.zeros((3072))
+                data = torch.cat((data[:,0 : i], data[:, i+1: ]), 1)
+                i = i - 1
+
         label = label.view(1, label.size(0))
         if args.cuda:
             data = data.cuda()
