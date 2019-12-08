@@ -30,10 +30,10 @@ class TCN(nn.Module):
 
 
 
-class lstm_classifier(nn.Module):
+class LSTM_classifier(nn.Module):
 
     def __init__(self, input_size, output_size, hidden_size):
-        super(lstm_classifier, self).__init__()
+        super(LSTM_classifier, self).__init__()
         self.lstm = nn.LSTM(input_size, hidden_size, batch_first = True)
         self.decoder = nn.Linear(hidden_size, output_size)
         self.sigmoid = nn.Sigmoid()
@@ -46,10 +46,10 @@ class lstm_classifier(nn.Module):
         y = self.sigmoid(y)
         return y
 
-class lstm_classifier_bidirectional(nn.Module):
+class LSTM_classifier_bidirectional(nn.Module):
 
     def __init__(self, input_size, output_size, hidden_size):
-        super(lstm_classifier_bidirectional, self).__init__()
+        super(LSTM_classifier_bidirectional, self).__init__()
         self.lstm = nn.LSTM(input_size, hidden_size, batch_first = True, bidirectional = True)
         self.decoder = nn.Linear(2  * hidden_size, output_size)
         self.sigmoid = nn.Sigmoid()
@@ -110,3 +110,19 @@ class GRU_classifier_mlayers(nn.Module):
         y = self.decoder(output[:,-1])
         y = self.sigmoid(y)
         return y
+
+class RNN_classifier(nn.Module):
+    def __init__(self, input_size, output_size, hidden_size):
+        super(RNN_classifier, self).__init__()
+        self.RNN = nn.RNN(input_size, hidden_size, batch_first = True)
+        self.decoder = nn.Linear(hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, input):
+        #input = input.permute(1, 0, 2)
+        #print(input.shape)
+        output, _ = self.RNN(input)
+        y = self.decoder(output[:,-1])
+        y = self.sigmoid(y)
+        return y
+

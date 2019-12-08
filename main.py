@@ -7,12 +7,14 @@ from torch.autograd import Variable
 import torch.optim as optim
 import sys
 from utils import data_generator
-from model import TCN
-from model import lstm_classifier
-from model import lstm_classifier_bidirectional
+from utils import data_generator1
+from model import TCN, RNN_classifier
+from model import LSTM_classifier
+from model import LSTM_classifier_bidirectional
 from model import GRU_classifier
 from model import GRU_classifier_bidirectional
 from model import GRU_classifier_mlayers
+from model import RNN_classifier
 import pickle
 from random import randint
 import random
@@ -43,9 +45,9 @@ parser.add_argument('--levels', type=int, default=4,
                     help='# of levels (default: 4)')
 parser.add_argument('--log-interval', type=int, default=2, metavar='N',
                     help='report interval (default: 2)')
-parser.add_argument('--lr', type=float, default=1.0,
+parser.add_argument('--lr', type=float, default=0.1,
                     help='initial learning rate (default: 0.1)')
-parser.add_argument('--nhid', type=int, default=1000,
+parser.add_argument('--nhid', type=int, default=500,
                     help='number of hidden units per layer (default: 600)')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed (default: 1111)')
@@ -59,6 +61,10 @@ parser.add_argument('--seq_len', type=int, default=80,
                     help='total sequence length, including effective history (default: 80)')
 parser.add_argument('--corpus', action='store_true',
                     help='force re-make the corpus (default: False)')
+parser.add_argument('--model', type=int, default=3,
+                    help='# of model (0 : TCN, 1 : LSTM, 2:LTSM_bidirectional, 3 : GRU, 4 : GRU_bidirectional 5 : RNN )')
+parser.add_argument('--lmodel', type=int, default=0,
+                    help='# of language model (0 : BERT, 1 : Glove)')
 args = parser.parse_args()
 
 # Set the random seed manually for reproducibility.
@@ -68,7 +74,13 @@ if torch.cuda.is_available():
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
 print(args)
-corpus = data_generator(args)
+corpus = None
+
+if args.lmodel == 0: # Instantiating corpus
+    corpus = data_generator(args)
+if args.lmodel == 1:
+    corpus = data_generator1(args)
+
 eval_batch_size = 10
 train_data = list(zip(corpus.train_embeddings, corpus.train_labels))
 valid_data = list(zip(corpus.valid_embeddings, corpus.valid_labels))
@@ -80,13 +92,21 @@ k_size = args.ksize
 dropout = args.dropout
 emb_dropout = args.emb_dropout
 tied = args.tied
-#model = TCN(args.emsize, 1, num_chans, dropout=dropout, kernel_size=k_size)
-#model = lstm_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
-#model = lstm_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = 600)
-#model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 600)
-#model = GRU_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = 600)
-#model = GRU_classifier_mlayers(input_size = args.emsize, output_size = 1, hidden_size = 600, num_layers = 2)
-model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = 500)
+
+if args.model == 0:
+    model = TCN(args.emsize, 1, num_chans, dropout=dropout, kernel_size=k_size)
+if args.model == 1:
+    model = LSTM_classifier(input_size = args.emsize, output_size = 1, hidden_size = args.nhid)
+if args.model == 2:
+    model = LSTM_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = args.nhid)
+if args.model == 3:
+    model = GRU_classifier(input_size = args.emsize, output_size = 1, hidden_size = args.nhid)
+if args.model == 4:
+    model = GRU_classifier_bidirectional(input_size = args.emsize, output_size = 1, hidden_size = args.nhid)
+if args.model == 5:
+    model = RNN_classifier(args.emsize, 1, hidden_size=args.nhid)
+
+
 if args.cuda:
     model.cuda()
 
@@ -148,12 +168,12 @@ def train():
         data, label = train_data[ind][0], train_data[ind][1]
         data = data.view(1, data.size(0), data.size(1))
 
-        for i in range (0, data.shape[1]):
-            p = random.random()
-            if p < 0.2:
+        #for i in range (0, data.shape[1]):
+            #p = random.random()
+            #if p < 0.2:
                 #data[0,i] = torch.zeros((3072))
-                data = torch.cat((data[:,0 : i], data[:, i+1: ]), 1)
-                i = i - 1
+            #    data = torch.cat((data[:,0 : i], data[:, i+1: ]), 1)
+            #    i = i - 1
 
         label = label.view(1, label.size(0))
         if args.cuda:
