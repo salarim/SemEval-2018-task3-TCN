@@ -206,7 +206,7 @@ def train():
     print('acc {:1.2f}, loss {:1.2f}'.format((float)(cor_num)/len(train_data), total_loss/len(train_data)))
 
 if __name__ == "__main__":
-    best_tacc = 0.0
+    best_vacc = 0.0
 
     # At any point you can hit Ctrl + C to break out of training early.
     try:
@@ -229,11 +229,11 @@ if __name__ == "__main__":
             scheduler.step(val_loss)
 
             # Save the model if the validation loss is the best we've seen so far.
-            if test_acc >= best_tacc:
+            if val_acc >= best_vacc:
                 with open("model.pt", 'wb') as f:
                     print('Save model!\n')
                     torch.save(model, f)
-                best_tacc = test_acc
+                best_tbest_vaccacc = val_acc
 
             # Anneal the learning rate if the validation loss plateaus
             # if epoch > 5 and val_loss >= max(all_vloss[-5:]):
